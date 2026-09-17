@@ -1,47 +1,63 @@
-name: Import Correct App
+name: Android CI
 
 on:
   push:
     branches: [ "main" ]
-  schedule:
-    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 env:
-  SOURCE_REPO: saleh12340/New-Tamim-invoices
-  SOURCE_BRANCH: v2-ai-enhanced
+  GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8
 
 jobs:
-  import:
+  build:
+    name: Build Friendly Tamim APK
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout target repository
-        uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v5
 
-      - name: Import verified source branch
-        if: hashFiles('SOURCE_IMPORT_INFO.txt') == ''
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf /tmp/source
-          git clone --depth 1 --branch "$SOURCE_BRANCH" "https://github.com/$SOURCE_REPO.git" /tmp/source
-          rsync -a --delete \
-            --exclude='.git/' \
-            --exclude='.github/workflows/' \
-            /tmp/source/ ./
-          printf 'Imported from %s branch %s at %s\n' "$SOURCE_REPO" "$SOURCE_BRANCH" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > SOURCE_IMPORT_INFO.txt
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
 
-      - name: Commit imported application
-        if: hashFiles('SOURCE_IMPORT_INFO.txt') != '' && hashFiles('IMPORT_COMMITTED.txt') == ''
-        shell: bash
+      - name: Grant execute permission for Gradle wrapper
+        run: chmod +x gradlew
+
+      - name: Clean previous build outputs
+        run: ./gradlew clean --stacktrace
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Verify APKs exist
         run: |
-          set -euo pipefail
-          touch IMPORT_COMMITTED.txt
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
-          git commit -m 'Import correct Tamim invoice app'
-          git push origin HEAD:main
+          set -e
+          test -f app/build/outputs/apk/debug/app-debug.apk
+          test -f app/build/outputs/apk/release/app-release-unsigned.apk
+          ls -lh app/build/outputs/apk/debug/app-debug.apk
+          ls -lh app/build/outputs/apk/release/app-release-unsigned.apk
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: friendly-winnertamim-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: friendly-winnertamim-release-unsigned
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error
+          retention-days: 30
