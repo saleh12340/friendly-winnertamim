@@ -4,10 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,20 +33,67 @@ fun CustomerAccountsScreen(viewModel: OmniViewModel, onBack: () -> Unit, onOpenI
     val groupedNotes = notes.groupBy { it.customerName.trim() }.filterKeys { it.isNotBlank() }
     var selected by remember(selectedCustomer) { mutableStateOf(selectedCustomer) }
     var showPayment by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
 
     if (selected != null) {
         CustomerAccountDetail(selected!!, groupedNotes[selected!!].orEmpty(), payments.filter { it.customerName.equals(selected!!, true) }, viewModel, { selected = null }, onOpenInvoice) { showPayment = true }
         if (showPayment) PaymentDialog(selected!!, { showPayment = false }) { amount, details -> viewModel.addCustomerPayment(selected!!, amount, details); showPayment = false }
         return
     }
-    Scaffold(topBar = { TopAppBar(title = { Text("حسابات العملاء", fontWeight = FontWeight.Bold) }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "رجوع") } }) }) { pad ->
-        if (customers.isEmpty()) Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.Center) { Column(horizontalAlignment = Alignment.CenterHorizontally) { Icon(Icons.Default.Person, null, Modifier.size(52.dp)); Spacer(Modifier.height(8.dp)); Text("لا يوجد عملاء مسجلون بعد"); Text("اكتب اسم العميل في الفاتورة وسيُحفظ تلقائياً", style = MaterialTheme.typography.bodySmall) } }
-        else LazyColumn(Modifier.fillMaxSize().padding(pad).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(customers, key = { it.lowercase() }) { name ->
-                var total by remember(name, notes) { mutableStateOf(0.0) }
-                LaunchedEffect(name, notes) { total = groupedNotes[name].orEmpty().fold(0.0) { acc, n -> acc + viewModel.invoiceTotal(n.id).first() } }
-                val paid = payments.filter { it.customerName.equals(name, true) }.sumOf { it.amount }
-                CustomerCard(name, groupedNotes[name].orEmpty().size, total - paid) { selected = name }
+    val cleanCustomers = remember(customers, searchQuery) {
+        val q = searchQuery.trim()
+        if (q.isBlank()) customers
+        else customers.filter { it.contains(q, ignoreCase = true) }
+    }
+
+    Scaffold(topBar = {
+        TopAppBar(
+            title = { Text("حسابات العملاء (${customers.size})", fontWeight = FontWeight.Bold) },
+            navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "رجوع") } }
+        )
+    }) { pad ->
+        if (customers.isEmpty()) {
+            Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.Person, null, Modifier.size(52.dp))
+                    Spacer(Modifier.height(8.dp))
+                    Text("لا يوجد عملاء مسجلون بعد")
+                    Text("اكتب اسم العميل في الفاتورة وسيُحفظ تلقائياً", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        } else {
+            Column(Modifier.fillMaxSize().padding(pad).padding(horizontal = 12.dp)) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("بحث عن عميل...") },
+                    leadingIcon = { Icon(Icons.Default.Search, null) },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Clear, "مسح")
+                            }
+                        }
+                    },
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    singleLine = true
+                )
+
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(cleanCustomers, key = { it.lowercase() }) { name ->
+                        var total by remember(name, notes) { mutableStateOf(0.0) }
+                        LaunchedEffect(name, notes) {
+                            total = groupedNotes[name].orEmpty().fold(0.0) { acc, n -> acc + viewModel.invoiceTotal(n.id).first() }
+                        }
+                        val paid = payments.filter { it.customerName.equals(name, true) }.sumOf { it.amount }
+                        CustomerCard(name, groupedNotes[name].orEmpty().size, total - paid) { selected = name }
+                    }
+                    item { Spacer(Modifier.height(16.dp)) }
+                }
             }
         }
     }
@@ -58,7 +102,11 @@ fun CustomerAccountsScreen(viewModel: OmniViewModel, onBack: () -> Unit, onOpenI
 @Composable
 private fun CustomerCard(name: String, invoiceCount: Int, balance: Double, onClick: () -> Unit) {
     val color = balanceColor(balance).takeUnless { it == Color.Unspecified } ?: MaterialTheme.colorScheme.onSurfaceVariant
-    Card(onClick = onClick, Modifier.fillMaxWidth()) { Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+    ) { Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Default.Person, null, Modifier.size(34.dp)); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text(name, fontWeight = FontWeight.Bold); Text("$invoiceCount فاتورة", style = MaterialTheme.typography.bodySmall) }
         Column(horizontalAlignment = Alignment.End) { Text("الرصيد", style = MaterialTheme.typography.bodySmall); Text(money(kotlin.math.abs(balance)), color = color, fontWeight = FontWeight.Bold); Text(if (balance > 0.009) "عليه" else if (balance < -0.009) "له" else "مسدد", color = color, style = MaterialTheme.typography.labelSmall) }
     } }
@@ -89,6 +137,46 @@ private fun CustomerAccountDetail(customerName: String, notes: List<Note>, payme
 
 @Composable
 private fun PaymentDialog(customerName: String, onDismiss: () -> Unit, onSave: (Double, String) -> Unit) {
-    var amount by remember { mutableStateOf("") }; var details by remember { mutableStateOf("دفعة") }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text("إضافة دفعة — $customerName") }, text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedTextField(amount, { amount = it }, label = { Text("المبلغ") }, singleLine = true); OutlinedTextField(details, { details = it }, label = { Text("البيان") }, singleLine = true) } }, confirmButton = { TextButton(onClick = { amount.toDoubleOrNull()?.takeIf { it > 0 }?.let { onSave(it, details) } }) { Text("حفظ") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } })
+    var amount by remember { mutableStateOf("") }
+    var details by remember { mutableStateOf("دفعة") }
+    val fieldShape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("إضافة دفعة — $customerName", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = amount,
+                    onValueChange = { amount = it },
+                    label = { Text("المبلغ") },
+                    shape = fieldShape,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = details,
+                    onValueChange = { details = it },
+                    label = { Text("البيان") },
+                    shape = fieldShape,
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                onClick = {
+                    amount.toDoubleOrNull()?.takeIf { it > 0 }?.let { onSave(it, details) }
+                }
+            ) { Text("حفظ الدفعة") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("إلغاء") }
+        }
+    )
 }

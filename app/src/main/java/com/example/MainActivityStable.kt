@@ -77,11 +77,5 @@ private fun AppNavigationStable(viewModel: OmniViewModel) {
             composable("smart") { SmartDashboardScreen(viewModel, onBack = { nav.popBackStack() }, onOpenHistory = { nav.navigate("history") }) }
             composable("settings") { SettingsScreen(viewModel, onBack = { nav.popBackStack() }) }
         }
-        if (route == "editor") {
-            Row(Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SmallFloatingActionButton(onClick = { nav.navigate("customers") }, containerColor = MaterialTheme.colorScheme.secondaryContainer) { Icon(Icons.Default.People, "حسابات العملاء") }
-                SmallFloatingActionButton(onClick = { nav.navigate("settings") }, containerColor = MaterialTheme.colorScheme.primaryContainer) { Icon(Icons.Default.Settings, "الإعدادات") }
-            }
-        }
     }
 }

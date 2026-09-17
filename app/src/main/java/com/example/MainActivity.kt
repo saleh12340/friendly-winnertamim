@@ -68,7 +68,16 @@ fun AppNavigation(viewModel: OmniViewModel) {
             )
         }
         composable("history") { HistoryScreen(viewModel, onBack = { navController.popBackStack() }) }
-        composable("customers") { CustomerAccountsScreen(viewModel, onBack = { navController.popBackStack() }) }
+        composable("customers") {
+            CustomerAccountsScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() },
+                onOpenInvoice = { id ->
+                    viewModel.selectNote(id)
+                    navController.navigate("editor")
+                }
+            )
+        }
         composable("smart") { SmartDashboardScreen(viewModel, onBack = { navController.popBackStack() }, onOpenHistory = { navController.navigate("history") }) }
         composable("settings") { SettingsScreen(viewModel, onBack = { navController.popBackStack() }) }
     }
