@@ -20,7 +20,25 @@ class OmniViewModel(private val repository: NoteRepository) : ViewModel() {
     val allNotes: StateFlow<List<Note>> = repository.allNotes.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val suggestions: StateFlow<List<Suggestion>> = repository.suggestions.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val allPayments: StateFlow<List<CustomerPayment>> = repository.allPayments.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val customerNames: StateFlow<List<String>> = allNotes.map { notes -> notes.map { it.customerName.trim() }.filter { it.isNotBlank() }.distinctBy { it.lowercase() }.sortedWith(String.CASE_INSENSITIVE_ORDER) }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val customerNames: StateFlow<List<String>> = combine(allNotes, allPayments) { notes, payments ->
+        val fromNotes = notes.map { it.customerName.trim() }
+        val fromPayments = payments.map { it.customerName.trim() }
+        (fromNotes + fromPayments)
+            .filter { it.isNotBlank() }
+            .distinctBy { it.lowercase() }
+            .sortedWith(String.CASE_INSENSITIVE_ORDER)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val itemSuggestions: StateFlow<List<String>> = combine(repository.suggestions, repository.allDistinctItemNames) { dbSuggestions, distinctNames ->
+        val starter = listOf(
+            "نص سكر", "شاهي", "حوايج وهرد", "قطمه رز عايدي", "قطمه بسمتي", "نص صلصه",
+            "سكر", "شاي", "رز عايدي", "رز بسمتي", "صلصة", "زيت", "حليب", "دقيق", "مكرونة", "تونة", "صابون", "بيض", "جبن"
+        )
+        (distinctNames + dbSuggestions.sortedByDescending { it.count }.map { it.word } + starter)
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinctBy { it.lowercase() }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     init { viewModelScope.launch { repository.lastNoteId.collect { id -> if (id != null && _currentNoteId.value == null) _currentNoteId.value = id else if (_currentNoteId.value == null) createNewNote() } } }
     fun selectNote(id: Long) { _currentNoteId.value = id; viewModelScope.launch { repository.setLastNoteId(id) } }
     fun createNewNote() { viewModelScope.launch { val notes = repository.allNotes.first(); val nextNumber = if (notes.isEmpty()) "1" else ((notes.mapNotNull { it.invoiceNumber.toIntOrNull() }.maxOrNull() ?: 0) + 1).toString(); selectNote(repository.saveNote(Note(title = "فاتورة $nextNumber", invoiceNumber = nextNumber))) } }

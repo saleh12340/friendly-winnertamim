@@ -28,6 +28,7 @@ private val Context.dataStore by preferencesDataStore(name = "settings")
 class NoteRepository(private val noteDao: NoteDao, private val context: Context) {
     val allNotes = noteDao.getAllNotes()
     val suggestions = noteDao.getSuggestions()
+    val allDistinctItemNames = noteDao.getAllDistinctItemNames()
     val allPayments = noteDao.getAllPayments()
     fun getItemsForNote(noteId: Long) = noteDao.getItemsForNote(noteId)
     fun invoiceTotal(noteId: Long): Flow<Double> = noteDao.getInvoiceTotal(noteId)

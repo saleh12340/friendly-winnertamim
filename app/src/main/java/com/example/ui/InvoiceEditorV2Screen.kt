@@ -5,11 +5,17 @@ import android.print.PrintAttributes
 import android.print.PrintManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -38,7 +44,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.NoteItem
 import kotlinx.coroutines.Dispatchers
@@ -59,7 +64,7 @@ fun InvoiceEditorV2Screen(
     val note by viewModel.currentNote.collectAsStateWithLifecycle()
     val items by viewModel.currentItems.collectAsStateWithLifecycle()
     val customers by viewModel.customerNames.collectAsStateWithLifecycle()
-    val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
+    val itemSuggestionsList by viewModel.itemSuggestions.collectAsStateWithLifecycle()
     val notes by viewModel.allNotes.collectAsStateWithLifecycle()
     val payments by viewModel.allPayments.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -93,15 +98,25 @@ fun InvoiceEditorV2Screen(
     val grandTotal = items.sumOf { it.quantity * it.price }
     val cleanCustomer = customerValue.text.trim()
 
+    // Matching customer suggestions: if field is blank, show recent/all customers (up to 10), else filter
     val matchingCustomers = remember(cleanCustomer, customers) {
-        if (cleanCustomer.isBlank()) emptyList()
-        else customers.filter { it.contains(cleanCustomer, ignoreCase = true) }.take(6)
+        if (cleanCustomer.isBlank()) {
+            customers.take(10)
+        } else {
+            val filtered = customers.filter { it.contains(cleanCustomer, ignoreCase = true) }
+            if (filtered.isEmpty()) emptyList() else filtered.take(10)
+        }
     }
 
+    // Matching item suggestions: if blank, show popular/starter items (up to 15), else filter
     val cleanItem = itemNameValue.text.trim()
-    val matchingItems = remember(cleanItem, suggestions) {
-        if (cleanItem.isBlank()) emptyList()
-        else suggestions.map { it.word }.filter { it.contains(cleanItem, ignoreCase = true) }.take(6)
+    val matchingItems = remember(cleanItem, itemSuggestionsList) {
+        if (cleanItem.isBlank()) {
+            itemSuggestionsList.take(15)
+        } else {
+            val filtered = itemSuggestionsList.filter { it.contains(cleanItem, ignoreCase = true) }
+            if (filtered.isEmpty()) emptyList() else filtered.take(15)
+        }
     }
 
     val customerBalance by produceState(0.0, cleanCustomer, notes, payments) {
@@ -308,58 +323,109 @@ fun InvoiceEditorV2Screen(
                                 }
 
                                 // Left: Customer Name input box
-                                Box(modifier = Modifier.weight(1f)) {
-                                    OutlinedTextField(
-                                        value = customerValue,
-                                        onValueChange = { newVal ->
-                                            customerValue = newVal
-                                            showCustomerSuggestions = true
-                                            viewModel.updateCustomerName(newVal.text)
-                                        },
-                                        placeholder = { Text("سليمان البرعسي", color = Color.Gray) },
-                                        shape = RoundedCornerShape(14.dp),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(54.dp)
-                                            .onFocusChanged { state ->
-                                                if (state.isFocused && customerValue.text.isNotEmpty()) {
+                                OutlinedTextField(
+                                    value = customerValue,
+                                    onValueChange = { newVal ->
+                                        customerValue = newVal
+                                        showCustomerSuggestions = true
+                                        viewModel.updateCustomerName(newVal.text)
+                                    },
+                                    placeholder = { Text("اسم العميل", color = Color.Gray) },
+                                    trailingIcon = {
+                                        if (customerValue.text.isNotEmpty()) {
+                                            IconButton(onClick = {
+                                                customerValue = TextFieldValue("")
+                                                viewModel.updateCustomerName("")
+                                                showCustomerSuggestions = true
+                                            }) {
+                                                Icon(Icons.Default.Close, contentDescription = "مسح", modifier = Modifier.size(18.dp), tint = Color.Gray)
+                                            }
+                                        } else {
+                                            IconButton(onClick = { showCustomerSuggestions = !showCustomerSuggestions }) {
+                                                Icon(
+                                                    if (showCustomerSuggestions) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
+                                                    contentDescription = "عرض العملاء",
+                                                    tint = vibrantBlue
+                                                )
+                                            }
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(54.dp)
+                                        .onFocusChanged { state ->
+                                            if (state.isFocused) {
+                                                showCustomerSuggestions = true
+                                                if (customerValue.text.isNotEmpty()) {
                                                     customerValue = customerValue.copy(
                                                         selection = TextRange(0, customerValue.text.length)
                                                     )
                                                 }
-                                            },
-                                        singleLine = true,
-                                        textStyle = LocalTextStyle.current.copy(
-                                            textAlign = TextAlign.Start,
-                                            fontSize = 15.sp
-                                        )
+                                            }
+                                        },
+                                    singleLine = true,
+                                    textStyle = LocalTextStyle.current.copy(
+                                        textAlign = TextAlign.Start,
+                                        fontSize = 15.sp
                                     )
+                                )
+                            }
 
-                                    val shouldShowDropdown = showCustomerSuggestions &&
-                                            matchingCustomers.isNotEmpty() &&
-                                            !matchingCustomers.any { it.equals(customerValue.text.trim(), ignoreCase = true) }
-
-                                    DropdownMenu(
-                                        expanded = shouldShowDropdown,
-                                        onDismissRequest = { showCustomerSuggestions = false },
-                                        properties = PopupProperties(
-                                            focusable = false,
-                                            dismissOnBackPress = true,
-                                            dismissOnClickOutside = true
-                                        ),
-                                        modifier = Modifier.fillMaxWidth(0.65f)
+                            // Customer Suggestions Bar (Chips)
+                            AnimatedVisibility(
+                                visible = showCustomerSuggestions && matchingCustomers.isNotEmpty(),
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically()
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(Color(0xFFF8FAFC), shape = RoundedCornerShape(12.dp))
+                                        .padding(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        matchingCustomers.forEach { name ->
-                                            DropdownMenuItem(
-                                                leadingIcon = {
-                                                    Icon(Icons.Default.Person, null, modifier = Modifier.size(18.dp), tint = vibrantBlue)
-                                                },
-                                                text = { Text(name, fontWeight = FontWeight.SemiBold) },
+                                        Text(
+                                            text = if (cleanCustomer.isBlank()) "العملاء المسجلين (اضغط للاختيار):" else "اقتراحات العملاء:",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = vibrantBlue,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "إغلاق ✕",
+                                            fontSize = 11.sp,
+                                            color = Color.Gray,
+                                            modifier = Modifier
+                                                .clickable { showCustomerSuggestions = false }
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                    LazyRow(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        contentPadding = PaddingValues(vertical = 2.dp)
+                                    ) {
+                                        items(matchingCustomers) { cName ->
+                                            SuggestionChip(
                                                 onClick = {
-                                                    customerValue = TextFieldValue(name, selection = TextRange(name.length))
+                                                    customerValue = TextFieldValue(cName, selection = TextRange(cName.length))
                                                     showCustomerSuggestions = false
-                                                    viewModel.updateCustomerName(name)
-                                                }
+                                                    viewModel.updateCustomerName(cName)
+                                                },
+                                                label = { Text(cName, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) },
+                                                icon = {
+                                                    Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(14.dp), tint = vibrantBlue)
+                                                },
+                                                colors = SuggestionChipDefaults.suggestionChipColors(
+                                                    containerColor = vibrantBlue.copy(alpha = 0.08f),
+                                                    labelColor = Color(0xFF0D47A1)
+                                                ),
+                                                border = BorderStroke(1.dp, vibrantBlue.copy(alpha = 0.3f)),
+                                                shape = RoundedCornerShape(10.dp)
                                             )
                                         }
                                     }
@@ -392,10 +458,14 @@ fun InvoiceEditorV2Screen(
                                     modifier = Modifier
                                         .weight(1.1f)
                                         .onFocusChanged { state ->
-                                            if (state.isFocused && totalValue.text.isNotEmpty()) {
-                                                totalValue = totalValue.copy(
-                                                    selection = TextRange(0, totalValue.text.length)
-                                                )
+                                            if (state.isFocused) {
+                                                showItemSuggestions = false
+                                                showCustomerSuggestions = false
+                                                if (totalValue.text.isNotEmpty()) {
+                                                    totalValue = totalValue.copy(
+                                                        selection = TextRange(0, totalValue.text.length)
+                                                    )
+                                                }
                                             }
                                         },
                                     keyboardOptions = KeyboardOptions(
@@ -430,10 +500,14 @@ fun InvoiceEditorV2Screen(
                                     modifier = Modifier
                                         .weight(0.9f)
                                         .onFocusChanged { state ->
-                                            if (state.isFocused && qtyValue.text.isNotEmpty()) {
-                                                qtyValue = qtyValue.copy(
-                                                    selection = TextRange(0, qtyValue.text.length)
-                                                )
+                                            if (state.isFocused) {
+                                                showItemSuggestions = false
+                                                showCustomerSuggestions = false
+                                                if (qtyValue.text.isNotEmpty()) {
+                                                    qtyValue = qtyValue.copy(
+                                                        selection = TextRange(0, qtyValue.text.length)
+                                                    )
+                                                }
                                             }
                                         },
                                     keyboardOptions = KeyboardOptions(
@@ -449,62 +523,113 @@ fun InvoiceEditorV2Screen(
                                 )
 
                                 // 3. Leftmost: اسم الصنف (Item Name)
-                                Box(modifier = Modifier.weight(1.8f)) {
-                                    OutlinedTextField(
-                                        value = itemNameValue,
-                                        onValueChange = { newVal ->
-                                            itemNameValue = newVal
-                                            showItemSuggestions = true
-                                        },
-                                        placeholder = { Text("اسم الصنف", fontSize = 13.sp) },
-                                        shape = RoundedCornerShape(14.dp),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .onFocusChanged { state ->
-                                                if (state.isFocused && itemNameValue.text.isNotEmpty()) {
+                                OutlinedTextField(
+                                    value = itemNameValue,
+                                    onValueChange = { newVal ->
+                                        itemNameValue = newVal
+                                        showItemSuggestions = true
+                                    },
+                                    placeholder = { Text("اسم الصنف", fontSize = 13.sp) },
+                                    trailingIcon = {
+                                        if (itemNameValue.text.isNotEmpty()) {
+                                            IconButton(onClick = {
+                                                itemNameValue = TextFieldValue("")
+                                                showItemSuggestions = true
+                                            }) {
+                                                Icon(Icons.Default.Close, contentDescription = "مسح", modifier = Modifier.size(16.dp), tint = Color.Gray)
+                                            }
+                                        } else {
+                                            IconButton(onClick = { showItemSuggestions = !showItemSuggestions }) {
+                                                Icon(
+                                                    if (showItemSuggestions) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
+                                                    contentDescription = "عرض الأصناف",
+                                                    tint = vibrantGreenDark
+                                                )
+                                            }
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier
+                                        .weight(1.8f)
+                                        .onFocusChanged { state ->
+                                            if (state.isFocused) {
+                                                showItemSuggestions = true
+                                                showCustomerSuggestions = false
+                                                if (itemNameValue.text.isNotEmpty()) {
                                                     itemNameValue = itemNameValue.copy(
                                                         selection = TextRange(0, itemNameValue.text.length)
                                                     )
                                                 }
-                                            },
-                                        keyboardOptions = KeyboardOptions(
-                                            keyboardType = KeyboardType.Text,
-                                            imeAction = ImeAction.Done
-                                        ),
-                                        keyboardActions = KeyboardActions(
-                                            onDone = { addOrUpdate() }
-                                        ),
-                                        singleLine = true,
-                                        textStyle = LocalTextStyle.current.copy(
-                                            textAlign = TextAlign.Start,
-                                            fontSize = 14.sp
-                                        )
+                                            }
+                                        },
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Text,
+                                        imeAction = ImeAction.Done
+                                    ),
+                                    keyboardActions = KeyboardActions(
+                                        onDone = { addOrUpdate() }
+                                    ),
+                                    singleLine = true,
+                                    textStyle = LocalTextStyle.current.copy(
+                                        textAlign = TextAlign.Start,
+                                        fontSize = 14.sp
                                     )
+                                )
+                            }
 
-                                    val shouldShowItemDropdown = showItemSuggestions &&
-                                            matchingItems.isNotEmpty() &&
-                                            !matchingItems.any { it.equals(itemNameValue.text.trim(), ignoreCase = true) }
-
-                                    DropdownMenu(
-                                        expanded = shouldShowItemDropdown,
-                                        onDismissRequest = { showItemSuggestions = false },
-                                        properties = PopupProperties(
-                                            focusable = false,
-                                            dismissOnBackPress = true,
-                                            dismissOnClickOutside = true
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
+                            // Item Suggestions Bar (Chips)
+                            AnimatedVisibility(
+                                visible = showItemSuggestions && matchingItems.isNotEmpty(),
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically()
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(Color(0xFFF1F8E9), shape = RoundedCornerShape(12.dp))
+                                        .padding(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        matchingItems.forEach { name ->
-                                            DropdownMenuItem(
-                                                leadingIcon = {
-                                                    Icon(Icons.Default.ShoppingBag, null, modifier = Modifier.size(16.dp), tint = vibrantGreen)
-                                                },
-                                                text = { Text(name) },
+                                        Text(
+                                            text = if (cleanItem.isBlank()) "أصناف سريعة ومقترحة (اضغط للاختيار):" else "اقتراحات الأصناف:",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = vibrantGreenDark,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "إغلاق ✕",
+                                            fontSize = 11.sp,
+                                            color = Color.Gray,
+                                            modifier = Modifier
+                                                .clickable { showItemSuggestions = false }
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                    LazyRow(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        contentPadding = PaddingValues(vertical = 2.dp)
+                                    ) {
+                                        items(matchingItems) { itemWord ->
+                                            SuggestionChip(
                                                 onClick = {
-                                                    itemNameValue = TextFieldValue(name, selection = TextRange(name.length))
+                                                    itemNameValue = TextFieldValue(itemWord, selection = TextRange(itemWord.length))
                                                     showItemSuggestions = false
-                                                }
+                                                },
+                                                label = { Text(itemWord, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) },
+                                                icon = {
+                                                    Icon(Icons.Default.ShoppingBag, contentDescription = null, modifier = Modifier.size(14.dp), tint = vibrantGreenDark)
+                                                },
+                                                colors = SuggestionChipDefaults.suggestionChipColors(
+                                                    containerColor = Color.White,
+                                                    labelColor = Color(0xFF1B5E20)
+                                                ),
+                                                border = BorderStroke(1.dp, vibrantGreen.copy(alpha = 0.4f)),
+                                                shape = RoundedCornerShape(10.dp)
                                             )
                                         }
                                     }

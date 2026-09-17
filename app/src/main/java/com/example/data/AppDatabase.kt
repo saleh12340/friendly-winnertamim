@@ -39,6 +39,9 @@ interface NoteDao {
     @Query("DELETE FROM note_items")
     suspend fun deleteAllItems()
 
+    @Query("SELECT DISTINCT name FROM note_items WHERE name != '' ORDER BY id DESC")
+    fun getAllDistinctItemNames(): Flow<List<String>>
+
     @Query("SELECT * FROM suggestions ORDER BY count DESC LIMIT 50")
     fun getSuggestions(): Flow<List<Suggestion>>
     @Query("SELECT * FROM suggestions")
