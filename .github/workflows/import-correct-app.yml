@@ -3,6 +3,8 @@ name: Import Correct App
 on:
   push:
     branches: [ "main" ]
+  schedule:
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -12,14 +14,21 @@ env:
   SOURCE_REPO: saleh12340/New-Tamim-invoices
   SOURCE_BRANCH: v2-ai-enhanced
 
+env2: unused
+
 jobs:
   import:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout empty target repository
+      - name: Checkout target repository
         uses: actions/checkout@v4
 
+      - name: Stop if application is already imported
+        if: hashFiles('SOURCE_IMPORT_INFO.txt') != ''
+        run: echo 'Application already imported; nothing to do.'
+
       - name: Import verified source branch
+        if: hashFiles('SOURCE_IMPORT_INFO.txt') == ''
         shell: bash
         run: |
           set -euo pipefail
@@ -33,16 +42,19 @@ jobs:
           rm -f .github/workflows/import-correct-app.yml
 
       - name: Commit imported application
+        if: hashFiles('SOURCE_IMPORT_INFO.txt') != '' && hashFiles('.github/workflows/import-correct-app.yml') == ''
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
+          git diff --cached --quiet && exit 0
           git commit -m 'Import correct Tamim invoice app'
           git push origin HEAD:main
 
       - name: Build imported application
+        if: hashFiles('gradlew') != '' && hashFiles('SOURCE_IMPORT_INFO.txt') != ''
         shell: bash
         run: |
           set -euo pipefail
@@ -52,6 +64,7 @@ jobs:
           test -f app/build/outputs/apk/release/app-release-unsigned.apk
 
       - name: Upload debug APK
+        if: hashFiles('app/build/outputs/apk/debug/app-debug.apk') != ''
         uses: actions/upload-artifact@v4
         with:
           name: friendly-winnertamim-debug
@@ -60,6 +73,7 @@ jobs:
           retention-days: 30
 
       - name: Upload release APK
+        if: hashFiles('app/build/outputs/apk/release/app-release-unsigned.apk') != ''
         uses: actions/upload-artifact@v4
         with:
           name: friendly-winnertamim-release-unsigned
