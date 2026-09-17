@@ -1,0 +1,35 @@
+<resources>
+    <string name="app_name">فاتورة مبيعات 2</string>
+    <string name="clear_page">مسح الكل</string>
+    <string name="new_note">فاتورة جديدة</string>
+    <string name="history">سجل الفواتير</string>
+    <string name="smart_print">طباعة الفاتورة</string>
+    <string name="print_split">طباعة (شقين)</string>
+    <string name="save_item">إضافة الصنف</string>
+    <string name="item_name">اسم الصنف</string>
+    <string name="quantity">الكمية</string>
+    <string name="price">السعر</string>
+    <string name="customer_name">اسم العميل</string>
+    <string name="invoice_number">رقم الفاتورة</string>
+    <string name="total">الإجمالي</string>
+    <string name="target_section">القسم</string>
+    <string name="font_size">حجم الخط:</string>
+    <string name="scroll_mode">وضع التمرير: </string>
+    <string name="on">مفعل</string>
+    <string name="off">معطل</string>
+    <string name="add_note">إضافة ملاحظة</string>
+    <string name="delete">حذف</string>
+    <string name="confirm_delete">هل أنت متأكد من الحذف؟</string>
+    <string name="cancel">إلغاء</string>
+    <string name="save">حفظ</string>
+    <string name="edit_item">تعديل الصنف</string>
+    <string name="exit_confirm_title">تأكيد الخروج</string>
+    <string name="exit_confirm_msg">هل أنت متأكد أنك تريد إغلاق التطبيق؟</string>
+    <string name="save_to_file">حفظ بالملفات</string>
+    <string name="share_receipt">مشاركة / بلوتوث</string>
+    <string name="invoice_saved_success">تم حفظ الفاتورة في مجلد التنزيلات/New-Tamim-invoices/Invoices</string>
+    <string name="invoice_save_failed">تعذر حفظ الفاتورة في الملفات</string>
+    <string name="no_items_warning">أضف أصنافاً أولاً للطباعة أو الحفظ</string>
+    <string name="confirm">نعم</string>
+    <string name="smart_dashboard">المركز الذكي</string>
+</resources>
