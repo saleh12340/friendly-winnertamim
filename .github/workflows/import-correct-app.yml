@@ -14,8 +14,6 @@ env:
   SOURCE_REPO: saleh12340/New-Tamim-invoices
   SOURCE_BRANCH: v2-ai-enhanced
 
-env2: unused
-
 jobs:
   import:
     runs-on: ubuntu-latest
